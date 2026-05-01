@@ -790,23 +790,435 @@ fi
     emmake make install
 )
 # --- LIBMPC ---
+(
+    mkdir -p "$AUX_BUILD/mpc"
+    cd "$AUX_BUILD/mpc"
+    
+    if [[ ! -d "$EXTERN_DIR/mpc-1.4.1" ]]; then
+        echo "Downloading MPC..."
+        curl -sSL https://ftp.gnu.org/gnu/mpc/mpc-1.4.1.tar.xz | tar xJ -C "$EXTERN_DIR"
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/mpc-1.4.1/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --with-gmp="$AUX_PREFIX" \
+            --with-mpfr="$AUX_PREFIX" \
+            --disable-shared \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBMPFI ---
+(
+    mkdir -p "$AUX_BUILD/mpfi"
+    cd "$AUX_BUILD/mpfi"
+    
+    if [[ ! -d "$EXTERN_DIR/mpfi" ]]; then
+        echo "Cloning mpfi..."
+        git clone https://gitlab.inria.fr/mpfi/mpfi.git "$EXTERN_DIR/mpfi"
+        
+        cd "$EXTERN_DIR/mpfi"
+        if [[ ! -f configure ]]; then
+            autoreconf -vfi
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/mpfi/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --with-gmp="$AUX_PREFIX" \
+            --with-mpfr="$AUX_PREFIX" \
+            --disable-shared \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBNAUTY ---
+(
+    mkdir -p "$AUX_BUILD/nauty"
+    cd "$AUX_BUILD/nauty"
+    
+    if [[ ! -d "$EXTERN_DIR/nauty2_9_3" ]]; then
+        echo "Downloading nauty..."
+        curl -sSL https://pallini.di.uniroma1.it/nauty2_9_3.tar.gz | tar xz -C "$EXTERN_DIR"
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/nauty2_9_3/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make nauty.a -j8
+    
+    echo "Installing nauty manually..."
+    mkdir -p "$AUX_PREFIX/include/nauty" "$AUX_PREFIX/lib"
+    
+    cp "$EXTERN_DIR/nauty2_9_3/"*.h "$AUX_PREFIX/include/nauty/"
+    
+    cp nauty.a "$AUX_PREFIX/lib/libnauty.a"
+    
+    emranlib "$AUX_PREFIX/lib/libnauty.a"
+)
 # --- LIBNCURSES ---
+(
+    mkdir -p "$AUX_BUILD/ncurses"
+    cd "$AUX_BUILD/ncurses"
+    
+    if [[ ! -d "$EXTERN_DIR/ncurses" ]]; then
+        echo "Downloading ncurses..."
+        mkdir -p "$EXTERN_DIR/ncurses_temp"
+        curl -sSL https://invisible-island.net/datafiles/release/ncurses.tar.gz | tar xz -C "$EXTERN_DIR/ncurses_temp"
+        
+        SRC_DIR=$(find "$EXTERN_DIR/ncurses_temp" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+        mv "$SRC_DIR" "$EXTERN_DIR/ncurses"
+        rm -rf "$EXTERN_DIR/ncurses_temp"
+    fi
+    
+    cd "$EXTERN_DIR/ncurses"
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure ./configure \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --without-shared \
+            --without-cxx \
+            --without-ada \
+            --without-progs \
+            --without-tests \
+            --enable-static \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBOPENBLAS ---
 # --- LIBOPENSSL ---
+(
+    mkdir -p "$AUX_BUILD/openssl"
+    cd "$AUX_BUILD/openssl"
+    
+    if [[ ! -d "$EXTERN_DIR/openssl" ]]; then
+        echo "Cloning openssl..."
+        git clone --depth 1 https://github.com/openssl/openssl.git "$EXTERN_DIR/openssl"
+    fi
+    
+    cd "$EXTERN_DIR/openssl"
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure ./Configure linux-generic32 \
+            --prefix="$AUX_PREFIX" \
+            no-shared \
+            no-asm \
+            no-threads \
+            no-dso \
+            no-tests
+    fi
+    
+    emmake make -j8
+    emmake make install_sw
+)
 # --- LIBPARI ---
+(
+    mkdir -p "$AUX_BUILD/pari"
+    cd "$AUX_BUILD/pari"
+    
+    if [[ ! -d "$EXTERN_DIR/pari-2.17.3" ]]; then
+        echo "Downloading pari..."
+        curl -sSL https://pari.math.u-bordeaux.fr/pub/pari/unix/pari-2.17.3.tar.gz | tar xz -C "$EXTERN_DIR"
+    fi
+    
+    cd "$EXTERN_DIR/pari-2.17.3"
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure ./Configure \
+            --prefix="$AUX_PREFIX" \
+            --with-gmp="$AUX_PREFIX" \
+            --graphic=none
+    fi
+    
+    emmake make lib-sta -j8
+    
+    emmake make install-lib-sta install-include
+    
+    emranlib "$AUX_PREFIX/lib/libpari.a"
+)
 # --- LIBPLANARITY ---
+(
+    mkdir -p "$AUX_BUILD/planarity"
+    cd "$AUX_BUILD/planarity"
+    
+    if [[ ! -d "$EXTERN_DIR/planarity" ]]; then
+        echo "Cloning planarity..."
+        git clone https://github.com/graph-algorithms/edge-addition-planarity-suite.git "$EXTERN_DIR/planarity"
+        
+        cd "$EXTERN_DIR/planarity"
+        if [[ ! -f configure ]]; then
+            if [[ -f autogen.sh ]]; then
+                ./autogen.sh
+            else
+                autoreconf -vfi
+            fi
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/planarity/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --disable-shared \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBPPL ---
+(
+    mkdir -p "$AUX_BUILD/ppl"
+    cd "$AUX_BUILD/ppl"
+    
+    if [[ ! -d "$EXTERN_DIR/ppl" ]]; then
+        echo "Cloning PPL..."
+        git clone https://github.com/BUGSENG/PPL.git "$EXTERN_DIR/ppl"
+        
+        cd "$EXTERN_DIR/ppl"
+        if [[ ! -f configure ]]; then
+            autoreconf -vfi
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/ppl/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --with-gmp-prefix="$AUX_PREFIX" \
+            --enable-interfaces="c,cxx" \
+            --disable-watchdog \
+            --disable-shared \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBPRIMECOUNT ---
+(
+    mkdir -p "$AUX_BUILD/primecount"
+    cd "$AUX_BUILD/primecount"
+    
+    if [[ ! -d "$EXTERN_DIR/primecount" ]]; then
+        echo "Cloning primecount..."
+        git clone https://github.com/kimwalisch/primecount.git "$EXTERN_DIR/primecount"
+    fi
+    
+    cd "$EXTERN_DIR/primecount"
+    
+    if [[ ! -f Makefile ]]; then
+        emcmake cmake . \
+            -DCMAKE_INSTALL_PREFIX="$AUX_PREFIX" \
+            -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_TESTS=OFF
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBPRIMESIEVE ---
+(
+    mkdir -p "$AUX_BUILD/primesieve"
+    cd "$AUX_BUILD/primesieve"
+    
+    if [[ ! -d "$EXTERN_DIR/primesieve" ]]; then
+        echo "Cloning primesieve..."
+        git clone https://github.com/kimwalisch/primesieve.git "$EXTERN_DIR/primesieve"
+    fi
+    
+    cd "$EXTERN_DIR/primesieve"
+    
+    if [[ ! -f Makefile ]]; then
+        emcmake cmake . \
+            -DCMAKE_INSTALL_PREFIX="$AUX_PREFIX" \
+            -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_STATIC_LIBS=ON \
+            -DBUILD_TESTS=OFF
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBPYTHON3 ---
+(
+    PYTHON_VERSION="3.12.4"
+    mkdir -p "$AUX_BUILD/python3"
+    cd "$AUX_BUILD/python3"
+    
+    if [[ ! -d "$EXTERN_DIR/Python-$PYTHON_VERSION" ]]; then
+        echo "Downloading Python $PYTHON_VERSION..."
+        curl -sSL "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz" | tar xz -C "$EXTERN_DIR"
+    fi
+    
+    cd "$EXTERN_DIR/Python-$PYTHON_VERSION"
+    
+    if [[ ! -f Makefile ]]; then
+        export ac_cv_buggy_getaddrinfo=no
+        export ac_cv_file__dev_ptmx=no
+        export ac_cv_file__dev_ptc=no
+        
+        emconfigure ./configure \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --without-pymalloc \
+            --disable-ipv6 \
+            --without-ensurepip \
+            --with-build-python=$(which python3.12) \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8 || emmake make
+    emmake make install
+)
 # --- LIBQHULL ---
+(
+    mkdir -p "$AUX_BUILD/qhull"
+    cd "$AUX_BUILD/qhull"
+    
+    if [[ ! -d "$EXTERN_DIR/qhull" ]]; then
+        echo "Cloning qhull..."
+        git clone https://github.com/qhull/qhull.git "$EXTERN_DIR/qhull"
+    fi
+    
+    cd "$EXTERN_DIR/qhull"
+    
+    if [[ ! -f Makefile ]] && [[ ! -f CMakeCache.txt ]]; then
+        emcmake cmake . \
+            -DCMAKE_INSTALL_PREFIX="$AUX_PREFIX" \
+            -DCMAKE_C_FLAGS="$CFLAGS" \
+            -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+            -DBUILD_SHARED_LIBS=OFF
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBREADLINE ---
+(
+    mkdir -p "$AUX_BUILD/readline"
+    cd "$AUX_BUILD/readline"
+    
+    if [[ ! -d "$EXTERN_DIR/readline" ]]; then
+        echo "Cloning readline..."
+        git clone https://git.savannah.gnu.org/git/readline.git "$EXTERN_DIR/readline"
+        
+        cd "$EXTERN_DIR/readline"
+        if [[ ! -f configure ]]; then
+            autoreconf -vfi || autoconf
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/readline/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --enable-static \
+            --with-curses \
+            CFLAGS="$CFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBRW ---
+(
+    mkdir -p "$AUX_BUILD/rw"
+    cd "$AUX_BUILD/rw"
+    
+    if [[ ! -d "$EXTERN_DIR/rw-0.10" ]]; then
+        echo "Downloading rw (librw)..."
+        curl -sSL "https://sourceforge.net/projects/rankwidth/files/rw-0.10.tar.gz/download" | tar xz -C "$EXTERN_DIR"
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/rw-0.10/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --disable-executable \
+            CFLAGS="$CFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBSINGULAR ---
 # --- LIBSQLITE3 ---
 # --- LIBSUITESPARSE ---
+(
+    mkdir -p "$AUX_BUILD/suitesparse"
+    cd "$AUX_BUILD/suitesparse"
+    
+    if [[ ! -d "$EXTERN_DIR/suitesparse" ]]; then
+        echo "Cloning SuiteSparse..."
+        git clone --depth 1 https://github.com/DrTimothyAldenDavis/SuiteSparse.git "$EXTERN_DIR/suitesparse"
+    fi
+    
+    cd "$EXTERN_DIR/suitesparse"
+    
+    if [[ ! -f Makefile ]] && [[ ! -f CMakeCache.txt ]]; then
+        emcmake cmake . \
+            -DCMAKE_INSTALL_PREFIX="$AUX_PREFIX" \
+            -DCMAKE_C_FLAGS="$CFLAGS" \
+            -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DSUITESPARSE_ENABLE_PROJECTS="amd;camd;colamd;ccolamd;cholmod;cxsparse;umfpack;spqr" \
+            -DNFORTRAN=ON
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBSYMMETRICA ---
 # --- LIBZ ---
 # --- LIBZMQ ---
