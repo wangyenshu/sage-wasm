@@ -2,4 +2,4 @@ Code to allow building SageMath to WASM using Emscripten. (Under Construction)
 
 Files:
 
-- `build.sh`: Run as `emscripten/build.sh` in root directory of SageMath. Requires installation of 'autoconf-archive' 'mercurial' 'python3 >= 3.12'. Recommended emsdk version: 3.1.23.
+- `build.sh`: Run as `emscripten/build.sh` in root directory of SageMath. Requires installation of 'autoconf-archive' 'mercurial' 'fossil' 'python3 >= 3.12'. Recommended emsdk version: 3.1.23.

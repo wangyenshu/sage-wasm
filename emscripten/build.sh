@@ -194,6 +194,51 @@ fi
     emmake make install
 )
 # --- LIBBOOST ---
+(
+    BOOST_VERSION_DIR="boost_1_91_0"
+    BOOST_VERSION_URL="1.91.0"
+    mkdir -p "$AUX_BUILD/boost"
+    cd "$AUX_BUILD/boost"
+    
+    if [[ ! -d "$EXTERN_DIR/$BOOST_VERSION_DIR" ]]; then
+        echo "Downloading Boost $BOOST_VERSION_URL..."
+        curl -sSL "https://archives.boost.io/release/$BOOST_VERSION_URL/source/${BOOST_VERSION_DIR}.tar.gz" | tar xz -C "$EXTERN_DIR"
+    fi
+    
+    cd "$EXTERN_DIR/$BOOST_VERSION_DIR"
+    
+    if [[ ! -f b2 ]]; then
+        env -u CC -u CXX -u CFLAGS -u CXXFLAGS -u LDFLAGS \
+        ./bootstrap.sh --with-toolset=gcc
+    fi
+    
+    cat > user-config-wasm.jam <<EOF
+using emscripten : : em++ : 
+    <cxxflags>"$CXXFLAGS" 
+    <cflags>"$CFLAGS" 
+    <linkflags>"$LDFLAGS" 
+    <archiver>emar 
+    <ranlib>emranlib 
+;
+EOF
+
+    ./b2 \
+        --user-config=user-config-wasm.jam \
+        toolset=emscripten \
+        variant=release \
+        link=static \
+        threading=single \
+        runtime-link=static \
+        --layout=system \
+        --prefix="$AUX_PREFIX" \
+        --without-context \
+        --without-coroutine \
+        --without-fiber \
+        --without-thread \
+        --without-stacktrace \
+        -j8 \
+        install
+)
 # --- LIBBRAIDING ---
 (
     mkdir -p "$AUX_BUILD/libbraiding"
@@ -286,6 +331,49 @@ fi
     cp libcliquer.a "$AUX_PREFIX/lib/"
 )
 # --- LIBECL ---
+(
+    mkdir -p "$AUX_BUILD/ecl-host"
+    mkdir -p "$AUX_BUILD/ecl-wasm"
+    
+    if [[ ! -d "$EXTERN_DIR/ecl" ]]; then
+        echo "Cloning ECL..."
+        git clone https://gitlab.com/embeddable-common-lisp/ecl.git "$EXTERN_DIR/ecl"
+    fi
+    
+    echo "Building native ECL (Host)..."
+    cd "$AUX_BUILD/ecl-host"
+    if [[ ! -f Makefile ]]; then
+        "$EXTERN_DIR/ecl/configure" \
+            --prefix="$AUX_BUILD/ecl-host/install" \
+            --disable-shared
+    fi
+    make -j8
+    make install
+    
+    export ECL_TO_RUN="$AUX_BUILD/ecl-host/install/bin/ecl"
+    
+    echo "Building WebAssembly ECL..."
+    cd "$AUX_BUILD/ecl-wasm"
+    
+    BUILD_ARCH=$(cc -dumpmachine || echo "x86_64-pc-linux-gnu")
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/ecl/configure" \
+            --host=wasm32-unknown-emscripten \
+            --build="$BUILD_ARCH" \
+            --with-cross-config="$EXTERN_DIR/ecl/src/util/wasm32-unknown-emscripten.cross_config" \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --with-tcp=no \
+            --with-cmp=no \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBECM ---
 (
     mkdir -p "$AUX_BUILD/ecm"
@@ -334,7 +422,94 @@ fi
     emmake make -j8
     emmake make install
 )
+# --- LIBGIVARO ---
+(
+    mkdir -p "$AUX_BUILD/givaro"
+    cd "$AUX_BUILD/givaro"
+    
+    if [[ ! -d "$EXTERN_DIR/givaro" ]]; then
+        echo "Cloning givaro..."
+        git clone https://github.com/linbox-team/givaro.git "$EXTERN_DIR/givaro"
+        
+        cd "$EXTERN_DIR/givaro" && ./autogen.sh && cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/givaro/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --with-gmp="$AUX_PREFIX" \
+            --disable-shared \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
+# --- LIBOPENBLAS ---
+(
+    mkdir -p "$AUX_BUILD/openblas"
+    cd "$AUX_BUILD/openblas"
+    
+    if [[ ! -d "$EXTERN_DIR/OpenBLAS" ]]; then
+        echo "Cloning OpenBLAS..."
+        git clone --depth 1 https://github.com/OpenMathLib/OpenBLAS.git "$EXTERN_DIR/OpenBLAS"
+    fi
+    
+    cd "$EXTERN_DIR/OpenBLAS"
+    
+    if [[ ! -f libopenblas.a ]]; then
+        emmake make -j8 \
+            HOSTCC="cc" \
+            TARGET="GENERIC" \
+            NOFORTRAN=1 \
+            USE_THREAD=0 \
+            NO_SHARED=1 \
+            MAKE_NB_JOBS=0
+    fi
+    
+    emmake make PREFIX="$AUX_PREFIX" NOFORTRAN=1 NO_SHARED=1 install
+)
 # --- LIBFFLAS_FFPACK ---
+(
+    mkdir -p "$AUX_BUILD/fflas_ffpack"
+    cd "$AUX_BUILD/fflas_ffpack"
+    
+    if [[ ! -d "$EXTERN_DIR/fflas-ffpack" ]]; then
+        echo "Cloning FFLAS-FFPACK..."
+        git clone https://github.com/linbox-team/fflas-ffpack.git "$EXTERN_DIR/fflas-ffpack"
+        
+        cd "$EXTERN_DIR/fflas-ffpack"
+        if [[ ! -f configure ]]; then
+            if [[ -f autogen.sh ]]; then
+                ./autogen.sh
+            else
+                autoreconf -vfi
+            fi
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/fflas-ffpack/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --disable-openmp \
+            --with-gmp="$AUX_PREFIX" \
+            --with-givaro="$AUX_PREFIX" \
+            --with-blas-libs="-L$AUX_PREFIX/lib -lopenblas" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS -std=c++11" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBFPLLL ---
 (
     mkdir -p "$AUX_BUILD/fplll"
@@ -384,6 +559,38 @@ fi
     emmake make install
 )
 # --- LIBGAP ---
+(
+    mkdir -p "$AUX_BUILD/gap"
+    cd "$AUX_BUILD/gap"
+    
+    if [[ ! -d "$EXTERN_DIR/gap" ]]; then
+        echo "Cloning GAP..."
+        git clone https://github.com/gap-system/gap.git "$EXTERN_DIR/gap"
+        
+        cd "$EXTERN_DIR/gap"
+        if [[ ! -f configure ]]; then
+            ./autogen.sh
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/gap/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --with-gmp="$AUX_PREFIX" \
+            --with-readline="$AUX_PREFIX" \
+            --with-zlib="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8 libgap.la
+    emmake make install-libgap install-headers
+)
 # --- LIBGC ---
 (
     mkdir -p "$AUX_BUILD/bdwgc"
@@ -476,32 +683,6 @@ fi
             --prefix="$AUX_PREFIX" \
             CPPFLAGS="-I$AUX_PREFIX/include -I$AUX_PREFIX/include/cddlib" \
             LDFLAGS="-L$AUX_PREFIX/lib" \
-            CXXFLAGS="$CXXFLAGS"
-    fi
-    
-    emmake make -j8
-    emmake make install
-)
-# --- LIBGIVARO ---
-(
-    mkdir -p "$AUX_BUILD/givaro"
-    cd "$AUX_BUILD/givaro"
-    
-    if [[ ! -d "$EXTERN_DIR/givaro" ]]; then
-        echo "Cloning givaro..."
-        git clone https://github.com/linbox-team/givaro.git "$EXTERN_DIR/givaro"
-        
-        cd "$EXTERN_DIR/givaro" && ./autogen.sh && cd -
-    fi
-    
-    if [[ ! -f Makefile ]]; then
-        emconfigure "$EXTERN_DIR/givaro/configure" \
-            --build=i686-pc-linux-gnu \
-            --host=wasm32-unknown-emscripten \
-            --with-gmp="$AUX_PREFIX" \
-            --disable-shared \
-            --prefix="$AUX_PREFIX" \
-            CFLAGS="$CFLAGS" \
             CXXFLAGS="$CXXFLAGS"
     fi
     
@@ -603,7 +784,7 @@ fi
     emmake make -j8
     emmake make install
 )
-# --- LIBLFUNCTION (lcalc) ---
+# --- LIBLFUNCTION ---
 (
     mkdir -p "$AUX_BUILD/lcalc"
     cd "$AUX_BUILD/lcalc"
@@ -914,7 +1095,6 @@ fi
     emmake make -j8
     emmake make install
 )
-# --- LIBOPENBLAS ---
 # --- LIBOPENSSL ---
 (
     mkdir -p "$AUX_BUILD/openssl"
@@ -1193,7 +1373,75 @@ fi
     emmake make install
 )
 # --- LIBSINGULAR ---
+(
+    mkdir -p "$AUX_BUILD/singular"
+    cd "$AUX_BUILD/singular"
+    
+    if [[ ! -d "$EXTERN_DIR/singular" ]]; then
+        echo "Cloning Singular..."
+        git clone https://github.com/Singular/Singular.git "$EXTERN_DIR/singular"
+        
+        cd "$EXTERN_DIR/singular"
+        if [[ ! -f configure ]]; then
+            ./autogen.sh
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/singular/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --enable-static \
+            --with-gmp="$AUX_PREFIX" \
+            --with-readline="$AUX_PREFIX" \
+            --without-python \
+            --disable-doc \
+            --disable-polymake \
+            --without-dynamic \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS -std=c++11" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8 -k || true
+    
+    emmake make install-libLTLIBRARIES install-includeHEADERS -k || true
+    emmake make install-nodist_includeHEADERS -k || true
+)
 # --- LIBSQLITE3 ---
+(
+    mkdir -p "$AUX_BUILD/sqlite3"
+    
+    if [[ ! -d "$EXTERN_DIR/sqlite3" ]]; then
+        echo "Cloning SQLite via Fossil..."
+        mkdir -p "$EXTERN_DIR/sqlite3"
+        cd "$EXTERN_DIR/sqlite3"
+        
+        fossil open https://sqlite.org/src
+    fi
+    
+    cd "$AUX_BUILD/sqlite3"
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/sqlite3/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --prefix="$AUX_PREFIX" \
+            --disable-shared \
+            --enable-static \
+            --disable-readline \
+            --disable-dynamic-extensions \
+            CFLAGS="$CFLAGS -DSQLITE_OMIT_LOAD_EXTENSION" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8 libsqlite3.la
+    
+    emmake make install-libLTLIBRARIES install-includeHEADERS
+)
 # --- LIBSUITESPARSE ---
 (
     mkdir -p "$AUX_BUILD/suitesparse"
@@ -1220,8 +1468,83 @@ fi
     emmake make install
 )
 # --- LIBSYMMETRICA ---
+(
+    mkdir -p "$AUX_BUILD/symmetrica"
+    cd "$AUX_BUILD/symmetrica"
+    
+    if [[ ! -d "$EXTERN_DIR/symmetrica" ]]; then
+        echo "Cloning symmetrica..."
+        git clone https://gitlab.com/sagemath/symmetrica.git "$EXTERN_DIR/symmetrica"
+        
+        cd "$EXTERN_DIR/symmetrica"
+        if [[ ! -f configure ]]; then
+            autoreconf -i
+        fi
+        cd -
+    fi
+    
+    if [[ ! -f Makefile ]]; then
+        emconfigure "$EXTERN_DIR/symmetrica/configure" \
+            --build=i686-pc-linux-gnu \
+            --host=wasm32-unknown-emscripten \
+            --disable-shared \
+            --prefix="$AUX_PREFIX" \
+            CFLAGS="$CFLAGS" \
+            CXXFLAGS="$CXXFLAGS" \
+            LDFLAGS="$LDFLAGS"
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBZ ---
+(
+    mkdir -p "$AUX_BUILD/zlib"
+    cd "$AUX_BUILD/zlib"
+    
+    if [[ ! -d "$EXTERN_DIR/zlib" ]]; then
+        echo "Cloning zlib..."
+        git clone https://github.com/madler/zlib.git "$EXTERN_DIR/zlib"
+    fi
+    
+    cd "$EXTERN_DIR/zlib"
+    
+    if [[ ! -f configure.log ]]; then
+        emconfigure ./configure \
+            --prefix="$AUX_PREFIX" \
+            --static
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 # --- LIBZMQ ---
+(
+    mkdir -p "$AUX_BUILD/zmq"
+    cd "$AUX_BUILD/zmq"
+    
+    if [[ ! -d "$EXTERN_DIR/libzmq" ]]; then
+        echo "Cloning libzmq..."
+        git clone https://github.com/zeromq/libzmq.git "$EXTERN_DIR/libzmq"
+    fi
+    
+    cd "$EXTERN_DIR/libzmq"
+    
+    if [[ ! -f Makefile ]] && [[ ! -f CMakeCache.txt ]]; then
+        emcmake cmake . \
+            -DCMAKE_INSTALL_PREFIX="$AUX_PREFIX" \
+            -DCMAKE_C_FLAGS="$CFLAGS" \
+            -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DBUILD_STATIC=ON \
+            -DZMQ_BUILD_TESTS=OFF \
+            -DWITH_PERF_TOOL=OFF \
+            -DENABLE_CPACK=OFF
+    fi
+    
+    emmake make -j8
+    emmake make install
+)
 
 # ==========================================
 
